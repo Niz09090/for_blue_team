@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  loghunter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: loghunter-app
+    ports:
+      - "3075:3075"
+    environment:
+      - LOGHUNTER_USERNAME=${LOGHUNTER_USERNAME:-admin}
+      - LOGHUNTER_PASSWORD=${LOGHUNTER_PASSWORD:-changeme}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3075/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
