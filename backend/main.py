@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import os
+import urllib.parse
 import re
 from datetime import datetime
 from collections import defaultdict
@@ -259,8 +260,7 @@ def analyze_logs(logs: List[LogEntry]) -> AnalysisResult:
 @app.post("/api/parse-logs")
 async def parse_logs(
     file: UploadFile = File(None),
-    raw_text: str = None,
-    username: str = Depends(get_current_username)
+    raw_text: str = None
 ):
     """Parse uploaded log file or raw text."""
     logs = []
