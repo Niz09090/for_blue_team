@@ -4,10 +4,17 @@ import SecurityScore from './SecurityScore';
 import AttackCharts from './AttackCharts';
 import LogTable from './LogTable';
 import UploadZone from './UploadZone';
+import AuthModal from './AuthModal';
+import History from './History';
 
-function Dashboard({ data, setData, onLogout }) {
+function Dashboard({ user, onLogin, onLogout, data, setData }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState('');
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [activeTab, setActiveTab] = useState('upload'); // 'upload' or 'history'
+  const [historyData, setHistoryData] = useState(null);
+
+  const getToken = () => localStorage.getItem('loghunter_token');
 
   const handleFileUpload = async (file) => {
     setIsProcessing(true);
@@ -16,14 +23,17 @@ function Dashboard({ data, setData, onLogout }) {
     const formData = new FormData();
     formData.append('file', file);
 
+    const headers = {
+      'Content-Type': 'multipart/form-data',
+    };
+    
+    const token = getToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     try {
-      const credentials = sessionStorage.getItem('loghunter_credentials');
-      const response = await axios.post('/api/parse-logs', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          'Authorization': `Basic ${credentials}`
-        }
-      });
+      const response = await axios.post('/api/parse-logs', formData, { headers });
       setData(response.data);
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to parse logs');
@@ -36,20 +46,46 @@ function Dashboard({ data, setData, onLogout }) {
     setIsProcessing(true);
     setError('');
 
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    
+    const token = getToken();
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     try {
-      const credentials = sessionStorage.getItem('loghunter_credentials');
-      const response = await axios.post('/api/parse-logs', { raw_text: text }, {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Basic ${credentials}`
-        }
-      });
+      const response = await axios.post('/api/parse-logs', { raw_text: text }, { headers });
       setData(response.data);
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to parse logs');
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleLoadHistory = async () => {
+    const token = getToken();
+    if (!token) {
+      setShowAuthModal(true);
+      return;
+    }
+
+    try {
+      const response = await axios.get('/api/history', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      setHistoryData(response.data);
+      setActiveTab('history');
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to load history');
+    }
+  };
+
+  const handleSelectHistory = (historyItem) => {
+    setData(historyItem);
+    setActiveTab('upload');
   };
 
   return (
@@ -64,19 +100,58 @@ function Dashboard({ data, setData, onLogout }) {
               </svg>
               <h1 className="text-xl font-bold text-white">LogHunter</h1>
             </div>
-            <button
-              onClick={onLogout}
-              className="text-gray-400 hover:text-white transition-colors"
-            >
-              Logout
-            </button>
+            
+            <div className="flex items-center space-x-4">
+              {user ? (
+                <>
+                  <span className="text-gray-300">{user.username}</span>
+                  <button
+                    onClick={() => setActiveTab('history')}
+                    className={`px-3 py-1 rounded transition-colors ${
+                      activeTab === 'history' 
+                        ? 'bg-soc-accent text-soc-darker' 
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    My History
+                  </button>
+                  <button
+                    onClick={onLogout}
+                    className="text-gray-400 hover:text-white transition-colors"
+                  >
+                    Logout
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => setShowAuthModal(true)}
+                  className="bg-soc-accent hover:bg-soc-accent/80 text-soc-darker font-medium py-2 px-4 rounded-lg transition-colors"
+                >
+                  Login
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </header>
 
+      {/* Auth Modal */}
+      {showAuthModal && (
+        <AuthModal
+          onClose={() => setShowAuthModal(false)}
+          onLogin={onLogin}
+        />
+      )}
+
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {!data ? (
+        {activeTab === 'history' && user ? (
+          <History
+            data={historyData}
+            onSelect={handleSelectHistory}
+            onBack={() => setActiveTab('upload')}
+          />
+        ) : !data ? (
           <UploadZone
             onFileUpload={handleFileUpload}
             onRawTextUpload={handleRawTextUpload}

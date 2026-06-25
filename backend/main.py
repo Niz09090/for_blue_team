@@ -1,6 +1,6 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, status
 from fastapi.staticfiles import StaticFiles
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -8,26 +8,127 @@ from typing import List, Optional
 import os
 import urllib.parse
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import defaultdict
 import secrets
 from urllib.parse import unquote
+import sqlite3
+import hashlib
+from jose import JWTError, jwt
+from passlib.context import CryptContext
 
 app = FastAPI(title="LogHunter API")
 
-# Security
-security = HTTPBasic()
+# Database setup
+DB_PATH = "/app/data/loghunter.db"
 
-def get_current_username(credentials: HTTPBasicCredentials = Depends(security)):
-    correct_username = os.getenv("LOGHUNTER_USERNAME", "admin")
-    correct_password = os.getenv("LOGHUNTER_PASSWORD", "changeme")
-    if credentials.username != correct_username or credentials.password != correct_password:
-        raise HTTPException(
-            status_code=401,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Basic"},
+def get_db():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Create users table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-    return credentials.username
+    ''')
+    
+    # Create log_submissions table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS log_submissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            security_score INTEGER,
+            total_requests INTEGER,
+            attack_counts TEXT,
+            attacks_by_time TEXT,
+            flagged_logs TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
+    
+    conn.commit()
+    conn.close()
+
+# JWT Configuration
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", secrets.token_urlsafe(32))
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password: str) -> str:
+    return pwd_context.hash(password)
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, username FROM users WHERE id = ?", (int(user_id),))
+    user = cursor.fetchone()
+    conn.close()
+    
+    if user is None:
+        raise credentials_exception
+    
+    return {"id": user["id"], "username": user["username"]}
+
+def get_optional_user(token: Optional[str] = None) -> Optional[dict]:
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            return None
+        
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, username FROM users WHERE id = ?", (int(user_id),))
+        user = cursor.fetchone()
+        conn.close()
+        
+        if user is None:
+            return None
+        
+        return {"id": user["id"], "username": user["username"]}
+    except JWTError:
+        return None
 
 # Models
 class LogEntry(BaseModel):
@@ -46,6 +147,27 @@ class AnalysisResult(BaseModel):
     attack_counts: dict
     attacks_by_time: dict
     flagged_logs: List[LogEntry]
+
+class UserCreate(BaseModel):
+    username: str
+    password: str
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class HistoryEntry(BaseModel):
+    id: int
+    security_score: int
+    total_requests: int
+    attack_counts: dict
+    attacks_by_time: dict
+    flagged_logs: List[LogEntry]
+    created_at: str
 
 # Log Parsing Patterns
 SQLI_PATTERNS = [
@@ -261,12 +383,64 @@ def analyze_logs(logs: List[LogEntry]) -> AnalysisResult:
         flagged_logs=flagged_logs
     )
 
+@app.post("/api/auth/register")
+async def register(user: UserCreate):
+    """Register a new user."""
+    conn = get_db()
+    cursor = conn.cursor()
+    
+    # Check if user exists
+    cursor.execute("SELECT id FROM users WHERE username = ?", (user.username,))
+    if cursor.fetchone():
+        conn.close()
+        raise HTTPException(status_code=400, detail="Username already registered")
+    
+    # Create user
+    password_hash = get_password_hash(user.password)
+    cursor.execute(
+        "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+        (user.username, password_hash)
+    )
+    conn.commit()
+    user_id = cursor.lastrowid
+    conn.close()
+    
+    return {"id": user_id, "username": user.username}
+
+@app.post("/api/auth/login", response_model=Token)
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    """Login and return JWT token."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, username, password_hash FROM users WHERE username = ?", (form_data.username,))
+    user = cursor.fetchone()
+    conn.close()
+    
+    if not user or not verify_password(form_data.password, user["password_hash"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": str(user["id"])}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.get("/api/auth/me", response_model=UserResponse)
+async def get_me(current_user: dict = Depends(get_current_user)):
+    """Get current user info."""
+    return current_user
+
 @app.post("/api/parse-logs")
 async def parse_logs(
     file: UploadFile = File(None),
-    raw_text: str = None
+    raw_text: str = None,
+    authorization: Optional[str] = None
 ):
-    """Parse uploaded log file or raw text."""
+    """Parse uploaded log file or raw text. Optional auth for saving to history."""
     logs = []
     
     if file:
@@ -286,12 +460,71 @@ async def parse_logs(
         raise HTTPException(status_code=400, detail="No valid log entries found")
     
     analysis = analyze_logs(logs)
+    
+    # Save to database if user is authenticated
+    user = None
+    if authorization:
+        token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
+        user = get_optional_user(token)
+    
+    if user:
+        import json
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO log_submissions (user_id, security_score, total_requests, attack_counts, attacks_by_time, flagged_logs)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (
+            user["id"],
+            analysis.security_score,
+            analysis.total_requests,
+            json.dumps(analysis.attack_counts),
+            json.dumps(analysis.attacks_by_time),
+            json.dumps([log.dict() for log in analysis.flagged_logs])
+        ))
+        conn.commit()
+        conn.close()
+    
     return analysis
+
+@app.get("/api/history", response_model=List[HistoryEntry])
+async def get_history(current_user: dict = Depends(get_current_user)):
+    """Get current user's submission history."""
+    import json
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT id, security_score, total_requests, attack_counts, attacks_by_time, flagged_logs, created_at
+        FROM log_submissions
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        LIMIT 50
+    ''', (current_user["id"],))
+    
+    history = []
+    for row in cursor.fetchall():
+        history.append({
+            "id": row["id"],
+            "security_score": row["security_score"],
+            "total_requests": row["total_requests"],
+            "attack_counts": json.loads(row["attack_counts"]),
+            "attacks_by_time": json.loads(row["attacks_by_time"]),
+            "flagged_logs": json.loads(row["flagged_logs"]),
+            "created_at": row["created_at"]
+        })
+    
+    conn.close()
+    return history
 
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy"}
+
+# Initialize database on startup
+@app.on_event("startup")
+async def startup_event():
+    init_db()
 
 # Mount static files for React production build
 app.mount("/", StaticFiles(directory="/app/frontend/build", html=True), name="static")

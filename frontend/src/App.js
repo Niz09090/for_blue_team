@@ -1,42 +1,42 @@
 import React, { useState, useEffect } from 'react';
-import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import './index.css';
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
   const [analysisData, setAnalysisData] = useState(null);
 
   useEffect(() => {
-    // Check if user is already authenticated
-    const auth = sessionStorage.getItem('loghunter_auth');
-    if (auth === 'true') {
-      setIsAuthenticated(true);
+    // Check for JWT token on page load
+    const token = localStorage.getItem('loghunter_token');
+    const userData = localStorage.getItem('loghunter_user');
+    if (token && userData) {
+      setUser(JSON.parse(userData));
     }
   }, []);
 
-  const handleLogin = () => {
-    setIsAuthenticated(true);
-    sessionStorage.setItem('loghunter_auth', 'true');
+  const handleLogin = (token, userData) => {
+    localStorage.setItem('loghunter_token', token);
+    localStorage.setItem('loghunter_user', JSON.stringify(userData));
+    setUser(userData);
   };
 
   const handleLogout = () => {
-    setIsAuthenticated(false);
-    sessionStorage.removeItem('loghunter_auth');
+    localStorage.removeItem('loghunter_token');
+    localStorage.removeItem('loghunter_user');
+    setUser(null);
     setAnalysisData(null);
   };
 
   return (
     <div className="min-h-screen bg-soc-darker">
-      {!isAuthenticated ? (
-        <Login onLogin={handleLogin} />
-      ) : (
-        <Dashboard 
-          data={analysisData} 
-          setData={setAnalysisData}
-          onLogout={handleLogout}
-        />
-      )}
+      <Dashboard 
+        user={user}
+        onLogin={handleLogin}
+        onLogout={handleLogout}
+        data={analysisData} 
+        setData={setAnalysisData}
+      />
     </div>
   );
 }

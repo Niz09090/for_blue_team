@@ -37,8 +37,9 @@ COPY backend/ .
 # Copy built frontend from previous stage
 COPY --from=frontend-builder /app/frontend/build ./frontend/build
 
-# Create non-root user
+# Create non-root user and data directory
 RUN useradd -m -u 1000 loghunter && \
+    mkdir -p /app/data && \
     chown -R loghunter:loghunter /app
 
 USER loghunter
