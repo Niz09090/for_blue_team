@@ -9,8 +9,9 @@ services:
     ports:
       - "3075:3075"
     environment:
-      - LOGHUNTER_USERNAME=${LOGHUNTER_USERNAME:-admin}
-      - LOGHUNTER_PASSWORD=${LOGHUNTER_PASSWORD:-changeme}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-}
+    volumes:
+      - loghunter-data:/app/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3075/api/health"]
@@ -18,3 +19,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+volumes:
+  loghunter-data:
