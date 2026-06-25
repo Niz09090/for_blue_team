@@ -11,6 +11,7 @@ import re
 from datetime import datetime
 from collections import defaultdict
 import secrets
+from urllib.parse import unquote
 
 app = FastAPI(title="LogHunter API")
 
@@ -81,19 +82,22 @@ PATH_TRAVERSAL_PATTERNS = [
 
 def detect_attack_type(log_line: str) -> tuple[Optional[str], Optional[str]]:
     """Detect attack type and extract payload from log line."""
+    # Decode URL-encoded log line before pattern matching
+    decoded_line = unquote(log_line)
+    
     for pattern in SQLI_PATTERNS:
-        if re.search(pattern, log_line):
-            match = re.search(pattern, log_line, re.IGNORECASE)
+        if re.search(pattern, decoded_line):
+            match = re.search(pattern, decoded_line, re.IGNORECASE)
             return "SQL Injection", match.group(0) if match else None
     
     for pattern in XSS_PATTERNS:
-        if re.search(pattern, log_line):
-            match = re.search(pattern, log_line, re.IGNORECASE)
+        if re.search(pattern, decoded_line):
+            match = re.search(pattern, decoded_line, re.IGNORECASE)
             return "XSS", match.group(0) if match else None
     
     for pattern in PATH_TRAVERSAL_PATTERNS:
-        if re.search(pattern, log_line):
-            match = re.search(pattern, log_line, re.IGNORECASE)
+        if re.search(pattern, decoded_line):
+            match = re.search(pattern, decoded_line, re.IGNORECASE)
             return "Path Traversal", match.group(0) if match else None
     
     return None, None
