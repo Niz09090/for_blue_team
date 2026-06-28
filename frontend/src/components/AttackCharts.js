@@ -1,5 +1,5 @@
 import React from 'react';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 const COLORS = [
   '#00d4ff', '#ff4757', '#ffa502', '#2ed573', '#a55eea',
@@ -8,21 +8,80 @@ const COLORS = [
   '#74b9ff', '#a29bfe', '#fab1a0', '#81ecec', '#55efc4'
 ];
 
-function AttackCharts({ attackCounts, attacksByTime }) {
+function AttackCharts({ attackCounts, attacksByTime, flaggedLogs }) {
   const pieData = Object.entries(attackCounts).map(([name, value]) => ({
     name,
     value
   }));
 
-  const barData = Object.entries(attacksByTime)
-    .map(([hour, count]) => ({
-      hour: `${hour}:00`,
-      attacks: count
-    }))
-    .sort((a, b) => a.hour.localeCompare(b.hour));
+  // Process timeline data with 5-minute granularity
+  const processTimelineData = (logs) => {
+    if (!logs || logs.length === 0) return [];
+
+    const timeBuckets = {};
+    
+    logs.forEach(log => {
+      if (!log.timestamp) return;
+      
+      const date = new Date(log.timestamp);
+      const minutes = Math.floor(date.getMinutes() / 5) * 5;
+      date.setMinutes(minutes, 0, 0);
+      const timeKey = date.toISOString();
+      
+      if (!timeBuckets[timeKey]) {
+        timeBuckets[timeKey] = {
+          time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          total: 0,
+          attacks: {}
+        };
+      }
+      
+      timeBuckets[timeKey].total += 1;
+      
+      if (log.attack_type) {
+        if (!timeBuckets[timeKey].attacks[log.attack_type]) {
+          timeBuckets[timeKey].attacks[log.attack_type] = 0;
+        }
+        timeBuckets[timeKey].attacks[log.attack_type] += 1;
+      }
+    });
+
+    return Object.entries(timeBuckets)
+      .map(([key, data]) => ({
+        time: data.time,
+        attacks: data.total,
+        breakdown: data.attacks
+      }))
+      .sort((a, b) => a.time.localeCompare(b.time));
+  };
+
+  const timelineData = processTimelineData(flaggedLogs);
+
+  // Custom tooltip for timeline chart
+  const TimelineTooltip = ({ active, payload, label }) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      const breakdownEntries = Object.entries(data.breakdown || {});
+      
+      return (
+        <div className="bg-soc-dark border border-gray-700 p-3 rounded-lg shadow-lg">
+          <p className="text-white font-medium mb-2">{label}</p>
+          <p className="text-soc-accent text-sm mb-2">Total: {data.attacks}</p>
+          {breakdownEntries.length > 0 && (
+            <div className="text-xs text-gray-400 space-y-1">
+              {breakdownEntries.map(([type, count]) => (
+                <p key={type}>{type}: {count}</p>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Attack Types Pie Chart */}
       <div className="bg-soc-dark rounded-lg p-6 border border-gray-800">
         <h3 className="text-lg font-semibold text-white mb-4">Attack Types Distribution</h3>
@@ -56,15 +115,21 @@ function AttackCharts({ attackCounts, attacksByTime }) {
         )}
       </div>
 
-      {/* Attack Frequency Bar Chart */}
-      <div className="bg-soc-dark rounded-lg p-6 border border-gray-800">
-        <h3 className="text-lg font-semibold text-white mb-4">Attack Frequency Over Time</h3>
-        {barData.length > 0 ? (
+      {/* Attack Timeline Area Chart */}
+      <div className="bg-soc-dark rounded-lg p-6 border border-gray-800 lg:col-span-2">
+        <h3 className="text-lg font-semibold text-white mb-4">Attack Timeline (5-min intervals)</h3>
+        {timelineData.length > 0 ? (
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={barData}>
+            <AreaChart data={timelineData}>
+              <defs>
+                <linearGradient id="colorAttacks" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#ff4757" stopOpacity={0.8}/>
+                  <stop offset="95%" stopColor="#ff4757" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#333" />
               <XAxis 
-                dataKey="hour" 
+                dataKey="time" 
                 stroke="#888"
                 style={{ fontSize: '12px' }}
               />
@@ -72,13 +137,17 @@ function AttackCharts({ attackCounts, attacksByTime }) {
                 stroke="#888"
                 style={{ fontSize: '12px' }}
               />
-              <Tooltip
-                contentStyle={{ backgroundColor: '#0a0e27', border: '1px solid #333' }}
-                itemStyle={{ color: '#fff' }}
-              />
+              <Tooltip content={<TimelineTooltip />} />
               <Legend />
-              <Bar dataKey="attacks" fill="#00d4ff" name="Attacks" />
-            </BarChart>
+              <Area 
+                type="monotone" 
+                dataKey="attacks" 
+                stroke="#ff4757" 
+                fillOpacity={1} 
+                fill="url(#colorAttacks)"
+                name="Attacks"
+              />
+            </AreaChart>
           </ResponsiveContainer>
         ) : (
           <div className="h-64 flex items-center justify-center text-gray-500">

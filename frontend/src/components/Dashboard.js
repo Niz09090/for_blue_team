@@ -7,6 +7,7 @@ import UploadZone from './UploadZone';
 import AuthModal from './AuthModal';
 import History from './History';
 import RecentAttacksSidebar from './RecentAttacksSidebar';
+import TopAttackerIPs from './TopAttackerIPs';
 
 function Dashboard({ user, onLogin, onLogout, data, setData }) {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -165,7 +166,11 @@ function Dashboard({ user, onLogin, onLogout, data, setData }) {
             <AttackCharts
               attackCounts={data.attack_counts}
               attacksByTime={data.attacks_by_time}
+              flaggedLogs={data.flagged_logs}
             />
+
+            {/* Top Attacker IPs */}
+            <TopAttackerIPs flaggedLogs={data.flagged_logs} />
 
             {/* Log Table */}
             <LogTable logs={data.flagged_logs} />
