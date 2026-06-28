@@ -8,6 +8,7 @@ import AuthModal from './AuthModal';
 import History from './History';
 import RecentAttacksSidebar from './RecentAttacksSidebar';
 import TopAttackerIPs from './TopAttackerIPs';
+import ErrorBoundary from './ErrorBoundary';
 
 function Dashboard({ user, onLogin, onLogout, data, setData }) {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -163,17 +164,23 @@ function Dashboard({ user, onLogin, onLogout, data, setData }) {
             <SecurityScore score={data.security_score} totalRequests={data.total_requests} />
 
             {/* Charts */}
-            <AttackCharts
-              attackCounts={data.attack_counts}
-              attacksByTime={data.attacks_by_time}
-              flaggedLogs={data.flagged_logs}
-            />
+            <ErrorBoundary>
+              <AttackCharts
+                attackCounts={data.attack_counts}
+                attacksByTime={data.attacks_by_time}
+                flaggedLogs={data.flagged_logs}
+              />
+            </ErrorBoundary>
 
             {/* Top Attacker IPs */}
-            <TopAttackerIPs flaggedLogs={data.flagged_logs} />
+            <ErrorBoundary>
+              <TopAttackerIPs flaggedLogs={data.flagged_logs} />
+            </ErrorBoundary>
 
             {/* Log Table */}
-            <LogTable logs={data.flagged_logs} />
+            <ErrorBoundary>
+              <LogTable logs={data.flagged_logs} />
+            </ErrorBoundary>
 
             {/* Upload New */}
             <div className="text-center">

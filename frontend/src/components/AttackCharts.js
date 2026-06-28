@@ -9,42 +9,51 @@ const COLORS = [
 ];
 
 function AttackCharts({ attackCounts, attacksByTime, flaggedLogs }) {
-  const pieData = Object.entries(attackCounts).map(([name, value]) => ({
+  const pieData = Object.entries(attackCounts || {}).map(([name, value]) => ({
     name,
     value
   }));
 
   // Process timeline data with 5-minute granularity
   const processTimelineData = (logs) => {
-    if (!logs || logs.length === 0) return [];
+    if (!logs || !Array.isArray(logs) || logs.length === 0) return [];
 
     const timeBuckets = {};
     
-    logs.forEach(log => {
-      if (!log.timestamp) return;
-      
-      const date = new Date(log.timestamp);
-      const minutes = Math.floor(date.getMinutes() / 5) * 5;
-      date.setMinutes(minutes, 0, 0);
-      const timeKey = date.toISOString();
-      
-      if (!timeBuckets[timeKey]) {
-        timeBuckets[timeKey] = {
-          time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          total: 0,
-          attacks: {}
-        };
-      }
-      
-      timeBuckets[timeKey].total += 1;
-      
-      if (log.attack_type) {
-        if (!timeBuckets[timeKey].attacks[log.attack_type]) {
-          timeBuckets[timeKey].attacks[log.attack_type] = 0;
+    try {
+      logs.forEach(log => {
+        if (!log || !log.timestamp) return;
+        
+        const date = new Date(log.timestamp);
+        
+        // Check if date is valid
+        if (isNaN(date.getTime())) return;
+        
+        const minutes = Math.floor(date.getMinutes() / 5) * 5;
+        date.setMinutes(minutes, 0, 0);
+        const timeKey = date.toISOString();
+        
+        if (!timeBuckets[timeKey]) {
+          timeBuckets[timeKey] = {
+            time: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            total: 0,
+            attacks: {}
+          };
         }
-        timeBuckets[timeKey].attacks[log.attack_type] += 1;
-      }
-    });
+        
+        timeBuckets[timeKey].total += 1;
+        
+        if (log.attack_type) {
+          if (!timeBuckets[timeKey].attacks[log.attack_type]) {
+            timeBuckets[timeKey].attacks[log.attack_type] = 0;
+          }
+          timeBuckets[timeKey].attacks[log.attack_type] += 1;
+        }
+      });
+    } catch (error) {
+      console.error('Error processing timeline data:', error);
+      return [];
+    }
 
     return Object.entries(timeBuckets)
       .map(([key, data]) => ({
@@ -55,7 +64,7 @@ function AttackCharts({ attackCounts, attacksByTime, flaggedLogs }) {
       .sort((a, b) => a.time.localeCompare(b.time));
   };
 
-  const timelineData = processTimelineData(flaggedLogs);
+  const timelineData = processTimelineData(flaggedLogs || []);
 
   // Custom tooltip for timeline chart
   const TimelineTooltip = ({ active, payload, label }) => {

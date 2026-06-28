@@ -3,27 +3,32 @@ import React from 'react';
 function TopAttackerIPs({ flaggedLogs }) {
   // Calculate Top 5 attacker IPs
   const getTopAttackerIPs = (logs) => {
-    if (!logs || logs.length === 0) return [];
+    if (!logs || !Array.isArray(logs) || logs.length === 0) return [];
 
     const ipStats = {};
     
-    logs.forEach(log => {
-      if (!log.ip || !log.attack_type) return;
-      
-      if (!ipStats[log.ip]) {
-        ipStats[log.ip] = {
-          total: 0,
-          attacks: {}
-        };
-      }
-      
-      ipStats[log.ip].total += 1;
-      
-      if (!ipStats[log.ip].attacks[log.attack_type]) {
-        ipStats[log.ip].attacks[log.attack_type] = 0;
-      }
-      ipStats[log.ip].attacks[log.attack_type] += 1;
-    });
+    try {
+      logs.forEach(log => {
+        if (!log || !log.ip || !log.attack_type) return;
+        
+        if (!ipStats[log.ip]) {
+          ipStats[log.ip] = {
+            total: 0,
+            attacks: {}
+          };
+        }
+        
+        ipStats[log.ip].total += 1;
+        
+        if (!ipStats[log.ip].attacks[log.attack_type]) {
+          ipStats[log.ip].attacks[log.attack_type] = 0;
+        }
+        ipStats[log.ip].attacks[log.attack_type] += 1;
+      });
+    } catch (error) {
+      console.error('Error processing attacker IPs:', error);
+      return [];
+    }
 
     return Object.entries(ipStats)
       .map(([ip, stats]) => ({
@@ -35,9 +40,10 @@ function TopAttackerIPs({ flaggedLogs }) {
       .slice(0, 5);
   };
 
-  const topIPs = getTopAttackerIPs(flaggedLogs);
+  const topIPs = getTopAttackerIPs(flaggedLogs || []);
 
   const getAttackSummary = (attacks) => {
+    if (!attacks || typeof attacks !== 'object') return '';
     const entries = Object.entries(attacks).sort((a, b) => b[1] - a[1]);
     return entries.map(([type, count]) => `${type} (${count}x)`).join(', ');
   };
