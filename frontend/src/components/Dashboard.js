@@ -49,17 +49,17 @@ function Dashboard({ user, onLogin, onLogout, data, setData }) {
     setIsProcessing(true);
     setError('');
 
-    const headers = {
-      'Content-Type': 'application/json',
-    };
-    
+    const formData = new FormData();
+    formData.append('raw_text', text);
+
     const token = getToken();
+    const headers = {};
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
     try {
-      const response = await axios.post('/api/parse-logs', { raw_text: text }, { headers });
+      const response = await axios.post('/api/parse-logs', formData, { headers });
       setData(response.data);
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to parse logs');
