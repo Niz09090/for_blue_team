@@ -24,7 +24,17 @@ function AttackCharts({ attackCounts, attacksByTime, flaggedLogs }) {
       logs.forEach(log => {
         if (!log || !log.timestamp) return;
         
-        const date = new Date(log.timestamp);
+        // Fix Apache/Nginx timestamp format: "28/Jun/2026:10:05:12 +0000" -> "28/Jun/2026 10:05:12 +0000"
+        let timestamp = log.timestamp;
+        if (typeof timestamp === 'string' && timestamp.includes(':')) {
+          // Replace the first colon (after the year) with a space
+          const firstColonIndex = timestamp.indexOf(':');
+          if (firstColonIndex > 0) {
+            timestamp = timestamp.substring(0, firstColonIndex) + ' ' + timestamp.substring(firstColonIndex + 1);
+          }
+        }
+        
+        const date = new Date(timestamp);
         
         // Check if date is valid
         if (isNaN(date.getTime())) return;
