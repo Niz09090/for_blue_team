@@ -49,8 +49,23 @@ function Dashboard({ user, onLogin, onLogout, data, setData }) {
     setIsProcessing(true);
     setError('');
 
+    console.log('Raw text upload - text:', text);
+    console.log('Raw text upload - text type:', typeof text);
+    console.log('Raw text upload - text length:', text?.length);
+
+    if (!text || text.trim() === '') {
+      setError('Please enter some log text');
+      setIsProcessing(false);
+      return;
+    }
+
     const formData = new FormData();
     formData.append('raw_text', text);
+    
+    console.log('FormData entries:');
+    for (let [key, value] of formData.entries()) {
+      console.log(`  ${key}:`, value?.substring(0, 50));
+    }
 
     const token = getToken();
     const headers = {};
@@ -60,8 +75,11 @@ function Dashboard({ user, onLogin, onLogout, data, setData }) {
 
     try {
       const response = await axios.post('/api/parse-logs', formData, { headers });
+      console.log('Raw text upload - response:', response.data);
       setData(response.data);
     } catch (err) {
+      console.error('Raw text upload - error:', err);
+      console.error('Raw text upload - error response:', err.response?.data);
       setError(err.response?.data?.detail || 'Failed to parse logs');
     } finally {
       setIsProcessing(false);
