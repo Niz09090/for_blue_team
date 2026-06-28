@@ -13,7 +13,6 @@ function Dashboard({ user, onLogin, onLogout, data, setData }) {
   const [error, setError] = useState('');
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [activeTab, setActiveTab] = useState('upload'); // 'upload' or 'history'
-  const [historyData, setHistoryData] = useState(null);
   const [showSidebar, setShowSidebar] = useState(false);
 
   const getToken = () => localStorage.getItem('loghunter_token');
@@ -64,28 +63,6 @@ function Dashboard({ user, onLogin, onLogout, data, setData }) {
       setError(err.response?.data?.detail || 'Failed to parse logs');
     } finally {
       setIsProcessing(false);
-    }
-  };
-
-  const handleLoadHistory = async () => {
-    const token = getToken();
-    if (!token) {
-      setShowAuthModal(true);
-      return;
-    }
-
-    try {
-      const response = await axios.get('/api/history', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      setHistoryData(response.data);
-      setActiveTab('history');
-    } catch (err) {
-      console.error('History fetch error:', err);
-      console.error('Error response:', err.response);
-      console.error('Error status:', err.response?.status);
-      console.error('Error data:', err.response?.data);
-      setError(err.response?.data?.detail || 'Failed to load history');
     }
   };
 
@@ -169,7 +146,6 @@ function Dashboard({ user, onLogin, onLogout, data, setData }) {
       <main className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 transition-all ${showSidebar ? 'ml-80' : ''}`}>
         {activeTab === 'history' && user ? (
           <History
-            data={historyData}
             onSelect={handleSelectHistory}
             onBack={() => setActiveTab('upload')}
           />
