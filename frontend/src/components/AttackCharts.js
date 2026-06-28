@@ -106,14 +106,14 @@ function AttackCharts({ attackCounts, attacksByTime, flaggedLogs }) {
         <h3 className="text-lg font-semibold text-white mb-4">Attack Types Distribution</h3>
         {pieData.length > 0 ? (
           <ResponsiveContainer width="100%" height={300}>
-            <PieChart margin={{ left: 40, right: 40, top: 20, bottom: 20 }}>
+            <PieChart margin={{ left: 80, right: 20, top: 20, bottom: 20 }}>
               <Pie
                 data={pieData}
-                cx="50%"
+                cx="55%"
                 cy="50%"
                 labelLine={false}
                 label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                outerRadius={60}
+                outerRadius={55}
                 fill="#8884d8"
                 dataKey="value"
               >
