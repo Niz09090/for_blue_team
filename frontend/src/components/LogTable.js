@@ -27,6 +27,11 @@ function LogTable({ logs }) {
       case 'SQL Injection': return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
       case 'XSS': return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
       case 'Path Traversal': return 'bg-orange-500/20 text-orange-400 border-orange-500/30';
+      case 'Command Injection': return 'bg-red-600/20 text-red-400 border-red-600/30';
+      case 'LFI/RFI': return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
+      case 'SSRF': return 'bg-pink-500/20 text-pink-400 border-pink-500/30';
+      case 'CVE Exploit': return 'bg-red-700/20 text-red-500 border-red-700/30';
+      case 'Scanner Traffic': return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
       case 'Brute Force': return 'bg-red-500/20 text-red-400 border-red-500/30';
       default: return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
     }

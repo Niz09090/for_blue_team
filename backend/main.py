@@ -56,6 +56,19 @@ def init_db():
         )
     ''')
     
+    # Create recent_attacks table for global attack feed
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS recent_attacks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            attack_type TEXT NOT NULL,
+            payload TEXT,
+            ip TEXT,
+            path TEXT,
+            timestamp TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
     conn.commit()
     conn.close()
 
@@ -202,25 +215,148 @@ PATH_TRAVERSAL_PATTERNS = [
     r'(?i)(%2e%2e%2f)',
 ]
 
+COMMAND_INJECTION_PATTERNS = [
+    r'(?i)(;\s*(cat|ls|pwd|whoami|id|uname|ifconfig|ipconfig|netstat|ps|wget|curl|nc|telnet|ssh|ftp))',
+    r'(?i)(\|\s*(cat|ls|pwd|whoami|id|uname|ifconfig|ipconfig|netstat|ps|wget|curl|nc|telnet|ssh|ftp))',
+    r'(?i)(&&\s*(cat|ls|pwd|whoami|id|uname|ifconfig|ipconfig|netstat|ps|wget|curl|nc|telnet|ssh|ftp))',
+    r'(?i)(`[^`]*`)',
+    r'(?i)(\$\([^)]*\))',
+    r'(?i)(;\s*rm\s+-rf)',
+    r'(?i)(;\s*chmod)',
+    r'(?i)(;\s*chown)',
+]
+
+LFI_RFI_PATTERNS = [
+    r'(?i)(php://input)',
+    r'(?i)(php://filter)',
+    r'(?i)(data://)',
+    r'(?i)(expect://)',
+    r'(?i)(zip://)',
+    r'(?i)(file://)',
+    r'(?i)(http://|https://[^\s]*\.php)',
+    r'(?i)(ftp://)',
+    r'(?i)(include\s*=)',
+    r'(?i)(require\s*=)',
+    r'(?i)(include_once\s*=)',
+    r'(?i)(require_once\s*=)',
+]
+
+SSRF_PATTERNS = [
+    r'(?i)(http://localhost)',
+    r'(?i)(http://127\.0\.0\.1)',
+    r'(?i)(http://0\.0\.0\.0)',
+    r'(?i)(http://169\.254\.169\.254)',
+    r'(?i)(http://192\.168\.)',
+    r'(?i)(http://10\.)',
+    r'(?i)(http://172\.(1[6-9]|2[0-9]|3[0-1])\.)',
+    r'(?i)(file:///etc/passwd)',
+    r'(?i)(file:///etc/shadow)',
+    r'(?i)(gopher://)',
+    r'(?i)(dict://)',
+]
+
+CVE_PATTERNS = [
+    r'(?i)(\$\{jndi:(ldap|rmi|dns|iiop)://)',
+    r'(?i)(\${lower:jndi:)',
+    r'(?i)(\${env:)',
+    r'(?i)(\${sys:)',
+    r'(?i)(class\.forName\()',
+    r'(?i)(Runtime\.getRuntime\(\)\.exec)',
+    r'(?i)(spring\.cloud\.function)',
+    r'(?i)(log4shell)',
+    r'(?i)(cve-2021-44228)',
+    r'(?i)(cve-2021-45046)',
+]
+
+SCANNER_PATTERNS = [
+    r'(?i)(nikto)',
+    r'(?i)(nmap)',
+    r'(?i)(dirbuster)',
+    r'(?i)(gobuster)',
+    r'(?i)(wfuzz)',
+    r'(?i)(sqlmap)',
+    r'(?i)(burpsuite)',
+    r'(?i)(owasp zap)',
+    r'(?i)(acunetix)',
+    r'(?i)(nessus)',
+    r'(?i)(openvas)',
+    r'(?i)(masscan)',
+    r'(?i)(zmap)',
+    r'(?i)(wpscan)',
+    r'(?i)(joomscan)',
+    r'(?i)(skipfish)',
+    r'(?i)(w3af)',
+    r'(?i)(hydra)',
+    r'(?i)(medusa)',
+    r'(?i)(patator)',
+    r'(?i)(metasploit)',
+    r'(?i)(msfconsole)',
+    r'(?i)(arachni)',
+    r'(?i)(skipfish)',
+    r'(?i)(robots\.txt)',
+    r'(?i)(\.env)',
+    r'(?i)(admin\.php)',
+    r'(?i)(wp-admin)',
+    r'(?i)(phpmyadmin)',
+    r'(?i)(xmlrpc\.php)',
+    r'(?i)(\.git)',
+    r'(?i)(\.svn)',
+    r'(?i)(web\.config)',
+    r'(?i)(\.htaccess)',
+]
+
 def detect_attack_type(log_line: str) -> tuple[Optional[str], Optional[str]]:
     """Detect attack type and extract payload from log line."""
     # Decode URL-encoded log line before pattern matching
     decoded_line = unquote(log_line)
     
+    # Check SQL Injection
     for pattern in SQLI_PATTERNS:
         if re.search(pattern, decoded_line):
             match = re.search(pattern, decoded_line, re.IGNORECASE)
             return "SQL Injection", match.group(0) if match else None
     
+    # Check XSS
     for pattern in XSS_PATTERNS:
         if re.search(pattern, decoded_line):
             match = re.search(pattern, decoded_line, re.IGNORECASE)
             return "XSS", match.group(0) if match else None
     
+    # Check Path Traversal
     for pattern in PATH_TRAVERSAL_PATTERNS:
         if re.search(pattern, decoded_line):
             match = re.search(pattern, decoded_line, re.IGNORECASE)
             return "Path Traversal", match.group(0) if match else None
+    
+    # Check Command Injection
+    for pattern in COMMAND_INJECTION_PATTERNS:
+        if re.search(pattern, decoded_line):
+            match = re.search(pattern, decoded_line, re.IGNORECASE)
+            return "Command Injection", match.group(0) if match else None
+    
+    # Check LFI/RFI
+    for pattern in LFI_RFI_PATTERNS:
+        if re.search(pattern, decoded_line):
+            match = re.search(pattern, decoded_line, re.IGNORECASE)
+            return "LFI/RFI", match.group(0) if match else None
+    
+    # Check SSRF
+    for pattern in SSRF_PATTERNS:
+        if re.search(pattern, decoded_line):
+            match = re.search(pattern, decoded_line, re.IGNORECASE)
+            return "SSRF", match.group(0) if match else None
+    
+    # Check CVE/Exploit Payloads
+    for pattern in CVE_PATTERNS:
+        if re.search(pattern, decoded_line):
+            match = re.search(pattern, decoded_line, re.IGNORECASE)
+            return "CVE Exploit", match.group(0) if match else None
+    
+    # Check Scanner Traffic
+    for pattern in SCANNER_PATTERNS:
+        if re.search(pattern, decoded_line):
+            match = re.search(pattern, decoded_line, re.IGNORECASE)
+            return "Scanner Traffic", match.group(0) if match else None
     
     return None, None
 
@@ -485,7 +621,61 @@ async def parse_logs(
         conn.commit()
         conn.close()
     
+    # Save flagged attacks to recent_attacks table for global feed
+    import json
+    conn = get_db()
+    cursor = conn.cursor()
+    for log in analysis.flagged_logs:
+        cursor.execute('''
+            INSERT INTO recent_attacks (attack_type, payload, ip, path, timestamp)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (
+            log.attack_type,
+            log.payload,
+            log.ip,
+            log.path,
+            log.timestamp
+        ))
+    conn.commit()
+    conn.close()
+    
+    # Keep only last 1000 recent attacks to prevent table bloat
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        DELETE FROM recent_attacks 
+        WHERE id NOT IN (SELECT id FROM recent_attacks ORDER BY created_at DESC LIMIT 1000)
+    ''')
+    conn.commit()
+    conn.close()
+    
     return analysis
+
+@app.get("/api/recent-attacks")
+async def get_recent_attacks():
+    """Get recent flagged attacks for the global feed."""
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT attack_type, payload, ip, path, timestamp, created_at
+        FROM recent_attacks
+        ORDER BY created_at DESC
+        LIMIT 50
+    ''')
+    
+    recent_attacks = []
+    for row in cursor.fetchall():
+        recent_attacks.append({
+            "attack_type": row["attack_type"],
+            "payload": row["payload"],
+            "ip": row["ip"],
+            "path": row["path"],
+            "timestamp": row["timestamp"],
+            "created_at": row["created_at"]
+        })
+    
+    conn.close()
+    return recent_attacks
 
 @app.get("/api/history", response_model=List[HistoryEntry])
 async def get_history(current_user: dict = Depends(get_current_user)):

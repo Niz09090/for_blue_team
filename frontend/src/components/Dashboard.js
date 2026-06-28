@@ -6,6 +6,7 @@ import LogTable from './LogTable';
 import UploadZone from './UploadZone';
 import AuthModal from './AuthModal';
 import History from './History';
+import RecentAttacksSidebar from './RecentAttacksSidebar';
 
 function Dashboard({ user, onLogin, onLogout, data, setData }) {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -13,6 +14,7 @@ function Dashboard({ user, onLogin, onLogout, data, setData }) {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [activeTab, setActiveTab] = useState('upload'); // 'upload' or 'history'
   const [historyData, setHistoryData] = useState(null);
+  const [showSidebar, setShowSidebar] = useState(false);
 
   const getToken = () => localStorage.getItem('loghunter_token');
 
@@ -90,8 +92,14 @@ function Dashboard({ user, onLogin, onLogout, data, setData }) {
 
   return (
     <div className="min-h-screen bg-soc-darker">
+      {/* Recent Attacks Sidebar */}
+      <RecentAttacksSidebar 
+        isOpen={showSidebar} 
+        onToggle={() => setShowSidebar(!showSidebar)} 
+      />
+
       {/* Header */}
-      <header className="bg-soc-dark border-b border-gray-800">
+      <header className={`bg-soc-dark border-b border-gray-800 transition-all ${showSidebar ? 'ml-80' : ''}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -102,6 +110,16 @@ function Dashboard({ user, onLogin, onLogout, data, setData }) {
             </div>
             
             <div className="flex items-center space-x-4">
+              <button
+                onClick={() => setShowSidebar(!showSidebar)}
+                className={`px-3 py-1 rounded transition-colors ${
+                  showSidebar 
+                    ? 'bg-soc-accent text-soc-darker' 
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Recent Attacks
+              </button>
               {user ? (
                 <>
                   <span className="text-gray-300">{user.username}</span>
@@ -144,7 +162,7 @@ function Dashboard({ user, onLogin, onLogout, data, setData }) {
       )}
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 transition-all ${showSidebar ? 'ml-80' : ''}`}>
         {activeTab === 'history' && user ? (
           <History
             data={historyData}

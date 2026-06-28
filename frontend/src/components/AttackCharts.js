@@ -1,7 +1,12 @@
 import React from 'react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
-const COLORS = ['#00d4ff', '#ff4757', '#ffa502', '#2ed573', '#a55eea'];
+const COLORS = [
+  '#00d4ff', '#ff4757', '#ffa502', '#2ed573', '#a55eea',
+  '#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7',
+  '#dfe6e9', '#6c5ce7', '#fd79a8', '#00b894', '#e17055',
+  '#74b9ff', '#a29bfe', '#fab1a0', '#81ecec', '#55efc4'
+];
 
 function AttackCharts({ attackCounts, attacksByTime }) {
   const pieData = Object.entries(attackCounts).map(([name, value]) => ({
