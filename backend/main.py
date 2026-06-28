@@ -239,13 +239,24 @@ LFI_RFI_PATTERNS = [
     r'(?i)(require\s*=)',
     r'(?i)(include_once\s*=)',
     r'(?i)(require_once\s*=)',
+    r'(?i)(/var/log/)',
+    r'(?i)(/proc/self/environ)',
+    r'(?i)(auth\.log)',
+    r'(?i)(/etc/passwd)',
+    r'(?i)(/etc/shadow)',
+    r'(?i)(/etc/hosts)',
+    r'(?i)(/proc/self/cwd)',
+    r'(?i)(/proc/self/cmdline)',
 ]
 
 SSRF_PATTERNS = [
+    r'(?i)(169\.254\.169\.254)',  # AWS/GCP/Azure metadata endpoint
+    r'(?i)(metadata/v1)',  # Cloud metadata path
+    r'(?i)(metadata/v2)',  # Cloud metadata path
+    r'(?i)(latest/meta-data)',  # AWS metadata path
     r'(?i)(http://localhost)',
     r'(?i)(http://127\.0\.0\.1)',
     r'(?i)(http://0\.0\.0\.0)',
-    r'(?i)(http://169\.254\.169\.254)',
     r'(?i)(http://192\.168\.)',
     r'(?i)(http://10\.)',
     r'(?i)(http://172\.(1[6-9]|2[0-9]|3[0-1])\.)',
@@ -266,6 +277,9 @@ CVE_PATTERNS = [
     r'(?i)(log4shell)',
     r'(?i)(cve-2021-44228)',
     r'(?i)(cve-2021-45046)',
+    r'(?i)(\(\)\s*\{\s*:\s*;\s*\};)',  # Shellshock
+    r'(?i)(shellshock)',
+    r'(?i)(cve-2014-6271)',
 ]
 
 SCANNER_PATTERNS = [
@@ -322,17 +336,17 @@ def detect_attack_type(log_line: str) -> tuple[Optional[str], Optional[str]]:
             match = re.search(pattern, decoded_line, re.IGNORECASE)
             return "XSS", match.group(0) if match else None
     
+    # Check Command Injection (before Path Traversal for correct priority)
+    for pattern in COMMAND_INJECTION_PATTERNS:
+        if re.search(pattern, decoded_line):
+            match = re.search(pattern, decoded_line, re.IGNORECASE)
+            return "Command Injection", match.group(0) if match else None
+    
     # Check Path Traversal
     for pattern in PATH_TRAVERSAL_PATTERNS:
         if re.search(pattern, decoded_line):
             match = re.search(pattern, decoded_line, re.IGNORECASE)
             return "Path Traversal", match.group(0) if match else None
-    
-    # Check Command Injection
-    for pattern in COMMAND_INJECTION_PATTERNS:
-        if re.search(pattern, decoded_line):
-            match = re.search(pattern, decoded_line, re.IGNORECASE)
-            return "Command Injection", match.group(0) if match else None
     
     # Check LFI/RFI
     for pattern in LFI_RFI_PATTERNS:
@@ -361,12 +375,13 @@ def detect_attack_type(log_line: str) -> tuple[Optional[str], Optional[str]]:
     return None, None
 
 def parse_nginx_log(line: str) -> Optional[LogEntry]:
-    """Parse Nginx access log format."""
-    # Common Nginx log format: IP - - [timestamp] "method path protocol" status "referer" "user-agent"
-    pattern = r'^(\S+) - - \[([^\]]+)\] "(\S+) (\S+) \S+" (\d+) \d+ "([^"]*)" "([^"]*)"'
+    """Parse Nginx access log format (Combined Log Format)."""
+    # Combined Log Format: IP - - [timestamp] "method path protocol" status size "referer" "user-agent"
+    # Uses non-greedy matching to handle spaces in path and user-agent
+    pattern = r'^(\S+) - - \[([^\]]+)\] "(\S+)\s+(.*?)\s+HTTP/[0-9.]+" (\d{3}) (\d+|-) "([^"]*)" "([^"]*)"'
     match = re.match(pattern, line)
     if match:
-        ip, timestamp, method, path, status, referer, user_agent = match.groups()
+        ip, timestamp, method, path, status, size, referer, user_agent = match.groups()
         attack_type, payload = detect_attack_type(line)
         return LogEntry(
             timestamp=timestamp,
@@ -381,12 +396,13 @@ def parse_nginx_log(line: str) -> Optional[LogEntry]:
     return None
 
 def parse_apache_log(line: str) -> Optional[LogEntry]:
-    """Parse Apache access log format."""
-    # Common Apache log format: IP - - [timestamp] "method path protocol" status size "referer" "user-agent"
-    pattern = r'^(\S+) - - \[([^\]]+)\] "(\S+) (\S+) \S+" (\d+) \d+ "([^"]*)" "([^"]*)"'
+    """Parse Apache access log format (Combined Log Format)."""
+    # Combined Log Format: IP - - [timestamp] "method path protocol" status size "referer" "user-agent"
+    # Uses non-greedy matching to handle spaces in path and user-agent
+    pattern = r'^(\S+) - - \[([^\]]+)\] "(\S+)\s+(.*?)\s+HTTP/[0-9.]+" (\d{3}) (\d+|-) "([^"]*)" "([^"]*)"'
     match = re.match(pattern, line)
     if match:
-        ip, timestamp, method, path, status, referer, user_agent = match.groups()
+        ip, timestamp, method, path, status, size, referer, user_agent = match.groups()
         attack_type, payload = detect_attack_type(line)
         return LogEntry(
             timestamp=timestamp,
@@ -423,7 +439,9 @@ def parse_generic_log(line: str) -> Optional[LogEntry]:
 def parse_log_line(line: str) -> Optional[LogEntry]:
     """Try multiple parsing strategies."""
     line = line.strip()
-    if not line:
+    
+    # Skip empty lines and comments
+    if not line or line.startswith('#'):
         return None
     
     # Try Nginx format first
