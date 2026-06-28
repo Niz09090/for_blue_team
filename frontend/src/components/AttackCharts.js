@@ -105,15 +105,15 @@ function AttackCharts({ attackCounts, attacksByTime, flaggedLogs }) {
       <div className="bg-soc-dark rounded-lg p-8 border border-gray-800">
         <h3 className="text-lg font-semibold text-white mb-4">Attack Types Distribution</h3>
         {pieData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart margin={{ left: 80, right: 20, top: 20, bottom: 20 }}>
+          <ResponsiveContainer width="100%" height={400}>
+            <PieChart margin={{ left: 100, right: 100, top: 30, bottom: 30 }}>
               <Pie
                 data={pieData}
-                cx="55%"
+                cx="50%"
                 cy="50%"
                 labelLine={false}
                 label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                outerRadius={55}
+                outerRadius={50}
                 fill="#8884d8"
                 dataKey="value"
               >
