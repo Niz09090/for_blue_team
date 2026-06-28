@@ -102,18 +102,18 @@ function AttackCharts({ attackCounts, attacksByTime, flaggedLogs }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       {/* Attack Types Pie Chart */}
-      <div className="bg-soc-dark rounded-lg p-8 border border-gray-800">
+      <div className="bg-soc-dark rounded-lg p-8 border border-gray-800 lg:col-span-2">
         <h3 className="text-lg font-semibold text-white mb-4">Attack Types Distribution</h3>
         {pieData.length > 0 ? (
           <ResponsiveContainer width="100%" height={400}>
-            <PieChart margin={{ left: 100, right: 100, top: 30, bottom: 30 }}>
+            <PieChart margin={{ left: 80, right: 80, top: 30, bottom: 30 }}>
               <Pie
                 data={pieData}
                 cx="50%"
                 cy="50%"
                 labelLine={false}
                 label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                outerRadius={50}
+                outerRadius={80}
                 fill="#8884d8"
                 dataKey="value"
               >
@@ -135,7 +135,7 @@ function AttackCharts({ attackCounts, attacksByTime, flaggedLogs }) {
       </div>
 
       {/* Attack Timeline Area Chart */}
-      <div className="bg-soc-dark rounded-lg p-6 border border-gray-800 lg:col-span-2">
+      <div className="bg-soc-dark rounded-lg p-6 border border-gray-800 lg:col-span-1">
         <h3 className="text-lg font-semibold text-white mb-4">Attack Timeline (5-min intervals)</h3>
         {timelineData.length > 0 ? (
           <ResponsiveContainer width="100%" height={300}>
