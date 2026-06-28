@@ -99,7 +99,7 @@ function Dashboard({ user, onLogin, onLogout, data, setData }) {
                     : 'text-gray-400 hover:text-white'
                 }`}
               >
-                Recent Attacks
+                Cyber Threat News
               </button>
               {user ? (
                 <>

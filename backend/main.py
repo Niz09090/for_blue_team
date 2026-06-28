@@ -13,6 +13,8 @@ from collections import defaultdict
 import secrets
 from urllib.parse import unquote
 import sqlite3
+import feedparser
+import requests
 import hashlib
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -723,6 +725,73 @@ async def get_history(current_user: dict = Depends(get_current_user)):
     
     conn.close()
     return history
+
+@app.get("/api/cyber-news")
+async def get_cyber_news():
+    """Fetch latest cybersecurity news from RSS feed."""
+    try:
+        # Fetch from The Hacker News RSS feed
+        feed_url = "https://feeds.feedburner.com/TheHackersNews"
+        feed = feedparser.parse(feed_url)
+        
+        articles = []
+        for entry in feed.entries[:15]:  # Get top 15 articles
+            # Parse published date
+            published_date = None
+            if hasattr(entry, 'published_parsed') and entry.published_parsed:
+                published_date = datetime(*entry.published_parsed[:6])
+            elif hasattr(entry, 'updated_parsed') and entry.updated_parsed:
+                published_date = datetime(*entry.updated_parsed[:6])
+            
+            # Calculate time ago
+            time_ago = "Unknown"
+            if published_date:
+                now = datetime.utcnow()
+                diff = now - published_date
+                hours = diff.total_seconds() / 3600
+                if hours < 1:
+                    minutes = int(diff.total_seconds() / 60)
+                    time_ago = f"{minutes}m ago"
+                elif hours < 24:
+                    time_ago = f"{int(hours)}h ago"
+                elif hours < 168:  # 7 days
+                    days = int(hours / 24)
+                    time_ago = f"{days}d ago"
+                else:
+                    time_ago = published_date.strftime("%b %d")
+            
+            # Get summary/description
+            summary = ""
+            if hasattr(entry, 'summary'):
+                summary = entry.summary
+            elif hasattr(entry, 'description'):
+                summary = entry.description
+            
+            # Strip HTML tags from summary
+            import re
+            summary = re.sub('<[^<]+?>', '', summary)
+            summary = summary[:200] + "..." if len(summary) > 200 else summary
+            
+            articles.append({
+                "title": entry.title,
+                "summary": summary,
+                "link": entry.link,
+                "published_date": published_date.isoformat() if published_date else None,
+                "time_ago": time_ago
+            })
+        
+        return articles
+    except Exception as e:
+        # Return fallback articles if feed fetch fails
+        return [
+            {
+                "title": "Unable to fetch news",
+                "summary": "Could not connect to news feed. Please try again later.",
+                "link": "#",
+                "published_date": None,
+                "time_ago": "Unknown"
+            }
+        ]
 
 @app.get("/api/health")
 async def health_check():
