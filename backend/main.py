@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, status
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, status, Header
 from fastapi.staticfiles import StaticFiles
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
@@ -592,7 +592,7 @@ async def get_me(current_user: dict = Depends(get_current_user)):
 async def parse_logs(
     file: UploadFile = File(None),
     raw_text: str = None,
-    authorization: Optional[str] = None
+    authorization: Optional[str] = Header(None)
 ):
     """Parse uploaded log file or raw text. Optional auth for saving to history."""
     logs = []

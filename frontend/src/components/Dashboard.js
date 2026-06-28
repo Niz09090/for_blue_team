@@ -81,6 +81,10 @@ function Dashboard({ user, onLogin, onLogout, data, setData }) {
       setHistoryData(response.data);
       setActiveTab('history');
     } catch (err) {
+      console.error('History fetch error:', err);
+      console.error('Error response:', err.response);
+      console.error('Error status:', err.response?.status);
+      console.error('Error data:', err.response?.data);
       setError(err.response?.data?.detail || 'Failed to load history');
     }
   };
